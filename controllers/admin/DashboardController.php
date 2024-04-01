@@ -9,8 +9,6 @@ class DashboardController extends Controller
             $select = $this->modelRender('Posts')
                 ->select()
                 ->where('id_admin', '=', $id)
-                ->order('id')
-                ->desc()
                 ->execute()
                 ->fetchAssocs();
             $this->viewRender('admin/Dashboard', $select);
@@ -28,7 +26,7 @@ class DashboardController extends Controller
                 $array['title'] = htmlspecialchars($_POST['title']);
                 $array['text'] = htmlspecialchars($_POST['text']);
                 $insert = $this->modelRender('Posts')->insert($array)->execute();
-                if ($insert->queryResult) {
+                if ($insert) {
                     redirect('admin/Dashboard');
                 } else {
                     $_SESSION['error_msg'] = 'Failed!';
@@ -88,8 +86,6 @@ class DashboardController extends Controller
                 } else {
                     $_SESSION['error_update_msg'] = 'Failed!';
                     $url = 'admin/Dashboard/updatePage?' . $id;
-                    var_dump($url);
-                    exit;
                 }
             } else {
                 $_SESSION['error_update_msg'] = 'Import all fields';

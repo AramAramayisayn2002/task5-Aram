@@ -2,37 +2,36 @@
 
 class Database
 {
-    public $tableName;
-    public $connect;
-    public $query;
-    public $queryResult;
+    protected $pdo;
+    protected $tableName;
+    protected $query;
+    protected $queryResult;
 
-    protected function __construct()
+    public function __construct($server_host, $db_name, $username, $password)
     {
-        $this->connect = new mysqli(SERVER_HOST, SERVER_USERNAME, SERVER_PASSWORD, DB_NAME);
-        if ($this->connect->connect_errno) {
-            echo "Error: " . $this->connect->connect_error;
+        try {
+            $dsn = "mysql:host=$server_host;dbname=$db_name";
+            $this->pdo = new PDO($dsn, $username, $password);
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $e) {
+            echo "Connection failed: " . $e->getMessage();
             exit();
         }
     }
 
     public function insert($post)
     {
-        $keys = " (";
-        $values = "(";
-        foreach (array_keys($post) as $key) {
-            $keys .= $key . ', ';
-            $values .= "'" . $this->connect->real_escape_string($post[$key]) . "', ";
-        }
-        $keys = substr($keys, 0, -2) . ')';
-        $values = substr($values, 0, -2) . ')';
-        $this->query = "INSERT INTO " . $this->tableName . $keys . " VALUES " . $values;
+        $keys = implode(", ", array_keys($post));
+        $values = implode(", ", array_fill(0, count($post), "?"));
+        $this->query = "INSERT INTO " . $this->tableName . " ($keys) VALUES ($values)";
+        $statement = $this->pdo->prepare($this->query);
+        $statement->execute(array_values($post));
         return $this;
     }
 
     public function select()
     {
-        $this->query .= "SELECT * FROM " . $this->tableName;
+        $this->query = "SELECT * FROM " . $this->tableName;
         return $this;
     }
 
@@ -44,87 +43,58 @@ class Database
 
     public function update($post)
     {
-        $str = '';
-        $this->query = "UPDATE " . $this->tableName . " SET ";
-        foreach (array_keys($post) as $key) {
-            $str .= $key . " = '" . $this->connect->real_escape_string($post[$key]) . "', ";
-        }
-        $str = substr($str, 0, -2);
-        $this->query .= $str;
+        $setClause = implode(", ", array_map(function ($key) {
+            return "$key = ?";
+        }, array_keys($post)));
+
+        $this->query = "UPDATE " . $this->tableName . " SET $setClause";
+        $statement = $this->pdo->prepare($this->query);
+        $statement->execute(array_values($post));
         return $this;
     }
 
     public function where($fieldName, $operator, $value)
     {
         if (strpos($this->query, "WHERE")) {
-            $this->query .= " " . $fieldName . " " . $operator . " '" . $this->connect->real_escape_string($value) . "'";
+            $this->query .= " AND $fieldName $operator $value";
         } else {
-            $this->query .= " WHERE " . $fieldName . " " . $operator . " '" . $this->connect->real_escape_string($value) . "' ";
+            $this->query .= " WHERE $fieldName $operator $value";
         }
-        return $this;
-    }
-
-    public function and()
-    {
-        $this->query .= " AND ";
-        return $this;
-    }
-
-    public function order($field)
-    {
-        $this->query .= " ORDER BY " . $field;
-        return $this;
-    }
-
-    public function desc()
-    {
-        $this->query .= " DESC ";
         return $this;
     }
 
     public function limit($count)
     {
-        $this->query .= " LIMIT " . $count;
+        $this->query .= " LIMIT $count";
         return $this;
     }
 
     public function offset($count)
     {
-        $this->query .= " OFFSET " . $count;
+        $this->query .= " OFFSET $count";
         return $this;
     }
 
     public function execute()
     {
-        $this->queryResult = mysqli_query($this->connect, $this->query);
+        $statement = $this->pdo->prepare($this->query);
+        $statement->execute();
+        $this->queryResult = $statement->fetchAll(PDO::FETCH_ASSOC);
         return $this;
     }
 
     public function numRows()
     {
-        if ($this->queryResult) {
-            return mysqli_num_rows($this->queryResult);
-        } else {
-            return false;
-        }
+        return $this->queryResult ? count($this->queryResult) : false;
     }
 
     public function fetchAssoc()
     {
-        if ($this->queryResult) {
-            $array = mysqli_fetch_array($this->queryResult);
-            return $array;
-        } else {
-            return false;
-        }
+        return $this->queryResult ? current($this->queryResult) : false;
     }
 
     public function fetchAssocs()
     {
-        $array = [];
-        for ($i = 0; $i < mysqli_num_rows($this->queryResult); $i++) {
-            $array[] = mysqli_fetch_assoc($this->queryResult);
-        }
-        return $array;
+        return $this->queryResult;
     }
 }
